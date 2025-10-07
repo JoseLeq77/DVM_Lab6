@@ -1,8 +1,10 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
     [SerializeField] private GameObject audioSettingsPanel;
+    [SerializeField] private int sceneIndexDestiny;
 
     public void ShowAudioSettingsPanel()
     {
@@ -18,5 +20,10 @@ public class GameManager : MonoBehaviour
         { 
             audioSettingsPanel.SetActive(false);
         }
+    }
+
+    public void ChangeScene()
+    {
+        SceneManager.LoadScene(sceneIndexDestiny);
     }
 }

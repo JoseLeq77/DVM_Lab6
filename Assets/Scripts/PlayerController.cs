@@ -12,10 +12,18 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private AudioManager audioManager;
     private int currentRoomIndex = -1;
     private bool isWalking = false;
+    
+    private bool canInteract = true; 
+    
+    [SerializeField] private float raycastDistance = 2f; 
+    [SerializeField] private Color gizmoColor = Color.green; 
+    
+    private Vector3 lastLookDirection;
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
+        lastLookDirection = transform.forward;
     }
 
     private void FixedUpdate()
@@ -24,6 +32,11 @@ public class PlayerController : MonoBehaviour
         inputDirection = inputDirection.normalized;
         velocity = new Vector3(inputDirection.x * moveSpeed, rb.linearVelocity.y, inputDirection.z * moveSpeed);
         rb.linearVelocity = velocity;
+        
+        if (inputDirection.magnitude > 0.1f)
+        {
+            lastLookDirection = inputDirection;
+        }
 
         bool walkingNow = inputDirection.magnitude > 0.1f;
         if (walkingNow && !isWalking)
@@ -37,15 +50,32 @@ public class PlayerController : MonoBehaviour
             isWalking = false;
         }
     }
+    
+    private void OnDrawGizmos()
+    {
+        Vector3 rayDirection = lastLookDirection.magnitude > 0.1f ? lastLookDirection : transform.forward;
+        
+        Gizmos.color = gizmoColor;
+        
+        Gizmos.DrawRay(transform.position, rayDirection * raycastDistance);
+        
+        RaycastHit hit;
+        if (Physics.Raycast(transform.position, rayDirection, out hit, raycastDistance))
+        {
+            if (hit.collider.GetComponent<NPCController>() != null)
+            {
+                Gizmos.color = Color.red;
+                Gizmos.DrawSphere(hit.point, 0.1f);
+            }
+        }
+    }
 
     private void OnTriggerEnter(Collider other)
     {
         RoomTrigger room = other.GetComponent<RoomTrigger>();
         if (room != null && room.MusicIndex != currentRoomIndex)
         {
-            audioManager.PlaySFXOneShot(1); 
-            audioManager.PlayMusic(room.MusicIndex); 
-            currentRoomIndex = room.MusicIndex;
+            StartRoomTransition(room.MusicIndex);
         }
     }
 
@@ -54,17 +84,59 @@ public class PlayerController : MonoBehaviour
         RoomTrigger room = other.GetComponent<RoomTrigger>();
         if (room != null && room.MusicIndex == currentRoomIndex)
         {
-            audioManager.PlaySFXOneShot(1); 
-            currentRoomIndex = -1;
+            audioManager.PlaySFXOneShot(1);
+            
+            SceneController.GetInstance().FadeIn(() => 
+            {
+                currentRoomIndex = -1;
+                SceneController.GetInstance().FadeOut();
+            });
         }
+    }
+    
+    private void StartRoomTransition(int roomMusicIndex)
+    {
+        SceneController.GetInstance().FadeIn(() => 
+        {
+            audioManager.PlaySFXOneShot(1);
+            audioManager.PlayMusic(roomMusicIndex);
+            currentRoomIndex = roomMusicIndex;
+            SceneController.GetInstance().FadeOut();
+        });
     }
     
     public void OnXMovement(InputAction.CallbackContext context)
     {
         directionX = context.ReadValue<float>();
     }
+    
     public void OnZMovement(InputAction.CallbackContext context)
     {
         directionZ = context.ReadValue<float>();
+    }
+    
+    public void OnInteract(InputAction.CallbackContext context)
+    {
+        if (canInteract)
+        {
+            Vector3 rayDirection = lastLookDirection;
+                
+            RaycastHit hit;
+            if (Physics.Raycast(transform.position, rayDirection, out hit, raycastDistance))
+            {
+                NPCController npc = hit.collider.GetComponent<NPCController>();
+                if (npc != null)
+                {
+                    npc.Interact();
+                    canInteract = false;
+                    Invoke("ResetInteraction", 1f);
+                }
+            }
+        }
+    }
+    
+    private void ResetInteraction()
+    {
+        canInteract = true;
     }
 }
